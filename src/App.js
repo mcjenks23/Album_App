@@ -6,17 +6,36 @@ import Button from "@material-ui/core/Button";
 import IconButton from "@material-ui/core/IconButton";
 import MenuIcon from "@material-ui/icons/Menu";
 import Drawer from "@material-ui/core/Drawer";
-import { auth } from "./firebase";
+import { auth, db, snapshotToArray } from "./firebase";
 import List from "@material-ui/core/List";
 import Divider from "@material-ui/core/Divider";
 import ListItem from "@material-ui/core/ListItem";
 import ListItemText from "@material-ui/core/ListItemText";
 import Photos from "./Photos";
 import AddAlbum from "./AddAlbum";
+import { Link, Route } from "react-router-dom";
 
 export function App(props) {
   const [drawer_open, setDrawerOpen] = useState(false);
   const [user, setUser] = useState(null);
+  const [d_open, setDOpen] = useState(false);
+  const [albums, setAlbums] = useState([]);
+
+  useEffect(() => {
+    let unsubscribe;
+
+    if (user) {
+      unsubscribe = db
+        .collection("users")
+        .doc(user.uid)
+        .collection("albums")
+        .onSnapshot(s => {
+          const user_albums = snapshotToArray(s);
+          setAlbums(user_albums);
+        });
+    }
+    return unsubscribe;
+  }, [user]);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(u => {
@@ -53,23 +72,6 @@ export function App(props) {
     return <div />;
   }
 
-  const sideList = side => (
-    <div>
-      <List>
-        <ListItem button>
-          <ListItemText primary="Nature" />
-        </ListItem>
-        <ListItem button>
-          <ListItemText primary="Cities" />
-        </ListItem>
-        <ListItem button>
-          <ListItemText primary="Create new album" />
-        </ListItem>
-      </List>
-      <Divider />
-    </div>
-  );
-
   return (
     <div>
       <AppBar position="static">
@@ -94,10 +96,39 @@ export function App(props) {
         </Toolbar>
       </AppBar>
       <Drawer open={drawer_open} onClose={handleCloseDrawer}>
-        {sideList("left")}
+        <div>
+          <List>
+            {albums.map(a => {
+              return (
+                <ListItem
+                  button
+                  to={"/app/album/" + a.id + "/"}
+                  component={Link}
+                  onClick={() => setDrawerOpen(false)}
+                >
+                  <ListItemText primary={a.title} />
+                </ListItem>
+              );
+            })}
+            <ListItem
+              button
+              onClick={() => {
+                setDOpen(true);
+              }}
+            >
+              <ListItemText primary="Add Album" />
+            </ListItem>
+            <AddAlbum open={d_open} onClose={setDOpen} user={user} />
+          </List>
+          <Divider />
+        </div>
       </Drawer>
-      <AddAlbum />
-      <Photos />
+      <Route
+        path="/app/album/:album_id/"
+        render={routeProps => {
+          return <Photos user={user} {...routeProps} />;
+        }}
+      />
     </div>
   );
 }
